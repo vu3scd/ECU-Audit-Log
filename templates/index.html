@@ -1,1 +1,70 @@
-<!-- placeholder for HTML -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECU Audit Log Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
+        table { width: 100%; border-collapse: collapse; background: white; }
+        th, td { padding: 10px; border: 1px solid #ccc; text-align: left; }
+        th { background-color: #333; color: #fff; }
+        input { width: 100%; padding: 10px; margin-bottom: 20px; }
+        footer { margin-top: 40px; text-align: center; font-size: 14px; color: #888; }
+    </style>
+</head>
+<body>
+    <h2>ECU Secure Audit Logs</h2>
+    <input type="text" id="search" placeholder="Search logs..." onkeyup="filterTable()">
+    <table id="logTable">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Event ID</th>
+                <th>Severity</th>
+                <th>Module</th>
+                <th>Message</th>
+                <th>Signature</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <footer>
+        &copy; 2025 DestroSolutions - ECU Audit Log Viewer
+    </footer>
+
+    <script>
+        async function fetchLogs() {
+            const response = await fetch('/api/logs');
+            const logs = await response.json();
+            const tableBody = document.querySelector('#logTable tbody');
+            tableBody.innerHTML = '';
+            logs.forEach(log => {
+                const row = `<tr>
+                    <td>${log.timestamp}</td>
+                    <td>${log.event_id}</td>
+                    <td>${log.severity}</td>
+                    <td>${log.module}</td>
+                    <td>${log.message}</td>
+                    <td>${log.signature}</td>
+                </tr>`;
+                tableBody.innerHTML += row;
+            });
+        }
+
+        function filterTable() {
+            const input = document.getElementById("search");
+            const filter = input.value.toLowerCase();
+            const rows = document.querySelectorAll("#logTable tbody tr");
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(filter) ? '' : 'none';
+            });
+        }
+
+        fetchLogs();
+    </script>
+</body>
+</html>
