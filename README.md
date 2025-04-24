@@ -1,40 +1,17 @@
 
-# ECU Audit CLI + Web Viewer
+## 🔄 v0.2.0 Updates
 
-A secure audit logging system for vehicle ECUs over CAN (ELM327) with a minimal web-based dashboard.
+- ✅ Auto-detects ELM327 or compatible USB/Bluetooth devices
+- ✅ CLI now probes connected serial ports and prompts for selection
+- ✅ Improves usability across Windows, Linux, macOS
 
-## Features
-- 🔒 Secure log generation with HMAC-SHA256
-- 🛠 Connects via ELM327 over USB serial
-- 📊 Web dashboard to view and search logs
-- 📦 CLI support for custom log size, secrets, and export path
-- 🐳 Dockerized setup
-- 🧪 GitHub Actions CI for validation
-
-## Installation
+## Usage (Updated)
 ```bash
-pip install -e .
+ecu-audit --auto
 ```
+You will be prompted to select from detected ports (e.g. COM5, /dev/ttyUSB0)
 
-## Usage
+To still specify a port manually:
 ```bash
-ecu-audit --channel COM3 --dump logs.json --secret myKey --buffer 100
+ecu-audit --channel COM3 --dump logs.json
 ```
-
-## Run Web Viewer
-```bash
-python ecu_audit/webapp.py
-```
-Visit [http://localhost:5000](http://localhost:5000)
-
-## Build & Run with Docker
-```bash
-docker build -t ecu-audit .
-docker run -p 5000:5000 ecu-audit
-```
-
-## Continuous Integration
-GitHub Actions will auto-check Python packaging and run your tests.
-
-## License
-MIT
