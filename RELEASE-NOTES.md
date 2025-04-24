@@ -1,17 +1,24 @@
 
-## 🔄 Release v0.2.0
+##  Release v0.2.0
 
-### ✨ New Features
+### New Features
 - ELM327 auto-detection (no manual port entry needed)
 - Improved onboarding for new users
 - CLI selection if multiple serial devices found
 
-### 🔧 Internal Improvements
+### Internal Improvements
 - Cross-platform detection using pyserial
 - Modularized utility functions
 - Better user prompts
 
-### 📅 Planned for v0.3.0
+###  Planned for v0.3.0
 - UDS service request integration
 - Log export in CBOR/XML formats
 - Secure gateway logging prototype
+
+
+## v0.3.0 (Coming Soon)
+- UDS request support
+- CBOR/XML log export
+- Secure gateway logging
+- Clause 11 alignment
