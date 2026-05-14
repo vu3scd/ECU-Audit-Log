@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECU Audit - Adapter Capability Check</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; color: #222; }
+        h2 { margin-bottom: 4px; }
+        .sub { color: #666; margin-top: 0; font-size: 14px; }
+        .panel { background: #fff; border: 1px solid #ccc; padding: 16px; margin-bottom: 20px; }
+        button { padding: 10px 16px; font-size: 14px; cursor: pointer; }
+        button:disabled { cursor: default; opacity: 0.6; }
+        select { padding: 8px; font-size: 14px; min-width: 280px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; margin-top: 10px; }
+        th, td { padding: 8px 10px; border: 1px solid #ccc; text-align: left; font-size: 14px; }
+        th { background: #333; color: #fff; }
+        .ok { color: #1a7f37; font-weight: bold; }
+        .no { color: #b00; font-weight: bold; }
+        .status { margin: 10px 0; font-style: italic; color: #555; }
+        .summary-grid { display: grid; grid-template-columns: 200px 1fr; gap: 4px 12px; font-size: 14px; }
+        .summary-grid div:nth-child(odd) { color: #666; }
+        .note { background: #fff8e1; border: 1px solid #e0c97f; padding: 10px 12px;
+                font-size: 13px; margin-top: 16px; }
+        footer { margin-top: 40px; text-align: center; font-size: 13px; color: #888; }
+        a { color: #0366d6; }
+    </style>
+</head>
+<body>
+    <h2>Adapter Capability Check</h2>
+    <p class="sub">Probe a connected ELM327 / OBD adapter to see what it reports. Read-only &mdash; no data is written to the vehicle.</p>
+
+    <div class="panel">
+        <label for="deviceSelect"><strong>Detected adapter:</strong></label><br><br>
+        <select id="deviceSelect"><option>Loading devices...</option></select>
+        <button id="refreshBtn" onclick="loadDevices()">Refresh</button>
+        <button id="probeBtn" onclick="runProbe()" disabled>Run Check</button>
+        <div class="status" id="status"></div>
+    </div>
+
+    <div class="panel" id="resultPanel" style="display:none;">
+        <h3>Summary</h3>
+        <div class="summary-grid" id="summaryGrid"></div>
+        <h3 style="margin-top:20px;">Command responses</h3>
+        <table id="resultTable">
+            <thead>
+                <tr><th>Command</th><th>Purpose</th><th>Response</th><th>Answered</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <div class="note">
+            This report shows what the adapter <em>claims</em>. ELM327 clones
+            vary widely &mdash; a device may report support for something and
+            still behave differently in practice. Protocol detection only
+            returns a meaningful value when the adapter is connected to a
+            powered vehicle bus.
+        </div>
+    </div>
+
+    <p><a href="/">&larr; Back to audit logs</a></p>
+    <footer>&copy; 2025 Sumit Chouhan - ECU Audit</footer>
+
+    <script>
+        const deviceSelect = document.getElementById('deviceSelect');
+        const probeBtn = document.getElementById('probeBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const statusEl = document.getElementById('status');
+
+        async function loadDevices() {
+            statusEl.textContent = '';
+            deviceSelect.innerHTML = '<option>Loading devices...</option>';
+            probeBtn.disabled = true;
+            try {
+                const resp = await fetch('/api/devices');
+                const data = await resp.json();
+                deviceSelect.innerHTML = '';
+                if (data.error) {
+                    deviceSelect.innerHTML = '<option>Error</option>';
+                    statusEl.textContent = data.error;
+                    return;
+                }
+                if (!data.devices || data.devices.length === 0) {
+                    deviceSelect.innerHTML = '<option value="">No adapters detected</option>';
+                    statusEl.textContent = 'No ELM327-like devices found. '
+                        + 'If your adapter is connected (and, for Bluetooth, paired), '
+                        + 'it may use a name the detector does not recognise.';
+                    return;
+                }
+                data.devices.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.port;
+                    opt.textContent = d.description + '  (' + d.port + ')';
+                    deviceSelect.appendChild(opt);
+                });
+                probeBtn.disabled = false;
+            } catch (e) {
+                deviceSelect.innerHTML = '<option>Error</option>';
+                statusEl.textContent = 'Could not reach the server: ' + e;
+            }
+        }
+
+        async function runProbe() {
+            const port = deviceSelect.value;
+            if (!port) { statusEl.textContent = 'No adapter selected.'; return; }
+
+            probeBtn.disabled = true;
+            refreshBtn.disabled = true;
+            statusEl.textContent = 'Probing adapter on ' + port
+                + ' ... this can take several seconds, the page will wait.';
+            document.getElementById('resultPanel').style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/probe?port=' + encodeURIComponent(port));
+                const data = await resp.json();
+                renderResult(data);
+            } catch (e) {
+                statusEl.textContent = 'Probe request failed: ' + e;
+            } finally {
+                probeBtn.disabled = false;
+                refreshBtn.disabled = false;
+            }
+        }
+
+        function renderResult(data) {
+            if (data.error && !data.results) {
+                statusEl.textContent = 'Error: ' + data.error;
+                return;
+            }
+            if (!data.connected) {
+                statusEl.textContent = 'Could not connect to the adapter: '
+                    + (data.error || 'unknown reason');
+                return;
+            }
+            const s = data.summary;
+            if (!s.responsive) {
+                statusEl.textContent = 'Port opened, but the adapter did not '
+                    + 'answer any commands. It may be the wrong port, or the '
+                    + 'device may need re-pairing.';
+            } else {
+                statusEl.textContent = 'Probe complete.';
+            }
+
+            const grid = document.getElementById('summaryGrid');
+            const rows = [
+                ['Identity (ATI)', s.identity],
+                ['Description (AT@1)', s.description],
+                ['Protocol number', s.protocol_number],
+                ['Protocol name', s.protocol_name],
+                ['Connector voltage', s.voltage],
+                ['Adapter responsive', s.responsive ? 'Yes' : 'No'],
+            ];
+            grid.innerHTML = '';
+            rows.forEach(([label, value]) => {
+                const l = document.createElement('div'); l.textContent = label;
+                const v = document.createElement('div');
+                v.textContent = (value === null || value === undefined) ? '\u2014' : value;
+                grid.appendChild(l); grid.appendChild(v);
+            });
+
+            const tbody = document.querySelector('#resultTable tbody');
+            tbody.innerHTML = '';
+            (data.results || []).forEach(r => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td>' + r.command + '</td>'
+                    + '<td>' + r.purpose + '</td>'
+                    + '<td>' + escapeHtml(r.response) + '</td>'
+                    + '<td class="' + (r.responded ? 'ok' : 'no') + '">'
+                    + (r.responded ? 'yes' : 'no') + '</td>';
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('resultPanel').style.display = 'block';
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
+        loadDevices();
+    </script>
+</body>
+</html>
