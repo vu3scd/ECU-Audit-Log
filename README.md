@@ -14,9 +14,10 @@ cryptographically chained log so that later edits, deletions, or reordering
 can be detected.
 
 > **Project status: pre-release / proof-of-concept.**
-> The secure logging core is implemented and tested. Live ECU communication
-> over CAN is **not yet implemented** — see [Roadmap](#roadmap) below for an
-> honest breakdown of what works today versus what is planned.
+> The secure logging core is implemented and tested. Adapter detection and a
+> read-only capability check are implemented. Live ECU communication over CAN
+> is **not yet implemented** — see [Roadmap](#roadmap) for an honest
+> breakdown of what works today versus what is planned.
 
 ---
 
@@ -24,19 +25,19 @@ can be detected.
 
 | Capability | Status |
 |---|---|
-| Hash-chained, HMAC-signed event logging | ✅ Implemented & unit-tested |
-| Integrity verification (`verify_logs` / `--verify`) | ✅ Implemented & unit-tested |
-| ELM327 / OBD serial device **detection** | ✅ Implemented |
-| Flask web viewer for browsing logs | ✅ Implemented |
-| Live CAN frame reading from a vehicle | ❌ Not yet implemented |
-| UDS diagnostic requests (`0x19`, `0x22`) | ❌ Planned (v0.3) |
-| CBOR / AUTOSAR XML export | ❌ Planned (v0.3) |
+| Hash-chained, HMAC-signed event logging | Implemented & unit-tested |
+| Integrity verification (`verify_logs` / `--verify`) | Implemented & unit-tested |
+| ELM327 / OBD serial device **detection** (USB & paired Bluetooth) | Implemented |
+| Adapter **capability check** (read-only probe, web UI) | Implemented; pending hardware validation |
+| Flask web viewer for browsing logs | Implemented |
+| Live CAN frame reading from a vehicle | Not yet implemented |
+| UDS diagnostic requests (`0x19`, `0x22`) | Planned (v0.3) |
+| CBOR / AUTOSAR XML export | Planned (v0.3) |
 
-In other words: the tool can **create, sign, store, and verify** an audit log
-today, and can **detect** a connected ELM327 adapter — but it does not yet
-**read traffic** from a vehicle. The `--auto` command currently detects a
-device and writes a session-start event; the CAN read loop is the next
-milestone.
+The tool can **create, sign, store, and verify** an audit log today, and can
+**detect and probe** a connected ELM327 adapter. It does not yet **read
+traffic** from a vehicle. The capability check is the first step toward that:
+it talks to the adapter (read-only) but not to the vehicle bus.
 
 ---
 
@@ -69,17 +70,43 @@ re-sign a modified log. Supply the key via `--secret-key` or the
 
 ---
 
+## Adapter capability check
+
+"ELM327" is a spec with many clone implementations, and they vary in which
+protocols and commands they actually support. The capability check helps a
+user answer: *will this adapter do what I expect?*
+
+Open the web viewer and go to **`/capabilities`**. Select a detected adapter
+and click **Run Check**. The tool sends a short sequence of **read-only**
+commands (identity, firmware, current protocol, connector voltage) and shows
+a report of what the adapter reports back.
+
+Notes and limitations:
+- Every command sent is read-only. Nothing is written to the vehicle bus, so
+  it is safe to run with the ignition on.
+- The report shows what the adapter **claims**. A clone may report support
+  for something and still behave differently in practice.
+- Protocol detection only returns a meaningful value when the adapter is
+  connected to a powered vehicle bus.
+- A Bluetooth adapter must be paired at the OS level first, so that it is
+  exposed as a serial device. If a connected adapter is not detected, it is
+  almost certainly a naming gap — the port can still be probed by selecting
+  it manually.
+
+---
+
 ## Quick Start
 
 ```bash
 pip install -r requirements.txt
 ```
 
-**Run the web viewer** (browse an existing log file):
+**Run the web viewer:**
 
 ```bash
 python ecu_audit/webapp.py
-# then open http://localhost:5000
+# logs:          http://localhost:5000
+# capability check: http://localhost:5000/capabilities
 ```
 
 **Detect a device and start a logging session:**
@@ -95,19 +122,17 @@ ecu-audit --auto
 ecu-audit --verify --secret-key "your-signing-key"
 ```
 
-This exits `0` if the chain is intact, or non-zero and prints the failing
-entry indices if it is not.
+Exits `0` if the chain is intact, or non-zero (printing the failing entry
+indices) if it is not.
 
 ---
 
-## Linux USB access
+## Linux / macOS adapter access
 
-Detecting a USB ELM327 adapter on Linux usually requires serial port
-permissions:
-
-```bash
-sudo usermod -aG dialout $USER   # then log out and back in
-```
+- **Linux USB:** serial access usually needs group membership —
+  `sudo usermod -aG dialout $USER`, then log out and back in.
+- **macOS Bluetooth:** pair the adapter in System Settings → Bluetooth first.
+  It then appears as a `/dev/cu.*` serial device.
 
 Python ≥ 3.7 is required.
 
@@ -119,8 +144,8 @@ Python ≥ 3.7 is required.
 python -m unittest discover -s tests -v
 ```
 
-The test suite covers entry creation, chain linkage, persistence, and the
-three tamper scenarios above.
+The suite covers entry creation, chain linkage, persistence, and the tamper
+scenarios (edit, delete, reorder, wrong key, forged append).
 
 ---
 
@@ -128,15 +153,15 @@ three tamper scenarios above.
 
 | Version | Focus | State |
 |---|---|---|
-| v0.1 | CLI logging skeleton, Flask viewer, Docker | Done |
-| v0.2 | Hash-chained tamper-evident logging, device detection, tests | **Current** |
+| v0.1 | CLI/Flask skeleton, Docker | Done |
+| v0.2 | Hash-chained logging, device detection, capability check, tests | **Current** |
 | v0.3 | Live CAN read loop, UDS requests, CBOR/XML export | Planned |
 | v0.4 | Multi-ECU gateway mode, cloud/MQTT forwarding | Planned |
 | v1.0 | Access control, ISO/UNR mapping docs, chain-of-custody reports | Planned |
 
-References to ISO/SAE 21434 and UN R155/R156 describe the **intended**
-direction of the project. They are design goals, not claims of certification
-or compliance.
+See `ROADMAP.md` for detail and `RELEASE-NOTES.md` for version history.
+References to ISO/SAE 21434 and UN R155/R156 describe intended direction, not
+certification or compliance.
 
 ---
 
